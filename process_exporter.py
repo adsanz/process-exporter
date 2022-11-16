@@ -58,9 +58,9 @@ class GatherMetrics():
         """Call prometheus to set to 0 the metrics of the processes that are not running"""
 
         prom = PrometheusConnect(url=PROMETHEUS, disable_ssl=True)
-
-        cpu = prom.custom_query(query="cpu_usage_percent != 0")
-        ram = prom.custom_query(query="memory_usage_bytes != 0")
+        host_format = "{" + f'host="{self.host}"' + "}"
+        cpu = prom.custom_query(query=f"cpu_usage_percent{host_format} != 0")
+        ram = prom.custom_query(query=f"memory_usage_bytes{host_format} != 0")
 
         self.judge(cpu, procs, "cpu")
         self.judge(ram, procs, "ram")
