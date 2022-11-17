@@ -16,6 +16,7 @@ prometheus_client.REGISTRY.unregister(prometheus_client.PROCESS_COLLECTOR)
 
 # OS ENV
 PROMETHEUS = os.environ.get('PROMETHEUS_HOST', 'http://localhost:9090')
+SCRAPE_TIME = os.environ.get('SCRAPE_TIME', 10)
 psutil.PROCFS_PATH = "/proc_container"
 logging.basicConfig(level=logging.INFO, format='%(name)s - %(levelname)s - %(message)s')
 
@@ -108,7 +109,7 @@ class MetricManager:
             procs = {p for p in psutil.process_iter(['name', 'cmdline', 'pid'])}
             logging.info("Starting metrics loop")
             self.metrics.fetch(procs)
-            time.sleep(5)
+            time.sleep(SCRAPE_TIME)
             self.metrics.cleaner(procs)
 
             

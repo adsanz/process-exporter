@@ -21,6 +21,11 @@ That's why I made this python script which basically use 3 main packages:
 
 This is designed to be run ONLY on linux machines, I haven't tested it on mac or windows, feel free to add PRs I'll review them.
 
+**VARIABLES**:
+- `PROMETHEUS_HOST`: Your prometheus instance
+- `EXPORTER_PORT`: The port where the exporter will attach
+- `SCRAPE_TIME`: This setting should be set the same as the scrape time of your prom instance (recommended is above 10, less will cause high usage)
+
 For usage, I recommend using docker! 
 
 1. Docker build: 
@@ -63,7 +68,7 @@ memory_total_bytes{host="atalanta"} 1.6566857728e+010
 
 ## Why there's a variable pointing to your prometheus instance
 
-The only variable is `PROMETHEUS_HOST` which is the end-point of your prometheus instance, why? Well... 
+There's a variable: `PROMETHEUS_HOST` which is the end-point of your prometheus instance, why? Well... 
 
 I have this code here (this gets process info and export de values on /metrics):
 
