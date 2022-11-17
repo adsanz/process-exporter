@@ -117,8 +117,10 @@ class MetricManager:
 def main():
     """Main entry point"""
     exporter_port = os.getenv("EXPORTER_PORT", 9877)
+    logging.info(f"Starting exporter on port {exporter_port}")
+    logging.info(f"Prometheus host: {PROMETHEUS}")
     metric_manager = MetricManager()
-    start_http_server(exporter_port)
+    start_http_server(exporter_port, registry=metric_manager.metrics.registry)
     metric_manager.run_metrics_loop()
 
 if __name__ == "__main__":
