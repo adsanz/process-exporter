@@ -7,7 +7,6 @@ WARNING: This is for a very specific usecase, I do not recommend this exporter f
 ![Screenshot](./docs/prom.png)
 ![Screenshot](./docs/grafana.png)
 
-
 ## USE CASE
 
 In my case, I need to debug jenkin slaves and need to check improvement between runs, I don't want to be checking top, and I might need to repeat this set-up. I also came across another process-exporter but it was written in go, and it wasn't useful for my case, I need to know really precise information related to processes overtime, that means that I need to check them dinamically and not grouping by regex and stuff. 
@@ -76,37 +75,50 @@ I have this code here (this gets process info and export de values on /metrics):
             logging.info("Starting metrics loop")
             self.metrics.fetch(procs)
             time.sleep(5)
+            self.metrics.cleaner(procs)
 ```
 
 Everytime we iterate, we might get new values, but the old ones, might not get updated! (the exporter will export these time series with the same value 4ever) I noticed this while load testing, I finisihed running the test, but the process still showed with high CPU usage, even though the process didn't exist anymore that's why I came up with this:
 
 ```python
     def judge(self, prom_response, procs, type):
-        """First check if the value is 0 for metric gathered, if not then check if it's on the procs list, if not then set to 0"""
+        """Compare the metrics on prometheus with the running processes and set to 0 the metrics of the processes that are not running and remove the labelset from prometheus"""
+
         proc_pid_list = [p.pid for p in procs]
 
         for metric in prom_response:
-            metric_pid = int(metric['metric']['proc_pid'])
-            if metric_pid not in proc_pid_list:
-                logging.warning(f'Process {metric["metric"]["proc_pid"]} not found on system, setting value to 0 on prometheus')
+            proc_pid = int(metric['metric']['proc_pid'])
+            if proc_pid not in proc_pid_list:
+                name = metric['metric']['proc_name']
+                cmdline = metric['metric']['proc_cmdline']
+                host = metric['metric']['host']
+
                 if type == "cpu":
-                    self.cpu_metric.labels(self.host, metric['metric']['proc_name'],metric['metric']['proc_cmdline'], metric['metric']['proc_pid']).set(0)
+                    logging.warning(f'[CPU JUDGE] Process {name} ({proc_pid}) cpu not found on system, set value to 0 & remove metric from pushgateway')
+                    self.cpu_metric.labels(host, name, str(cmdline), proc_pid).set(0)
+                    self.cpu_metric.remove(host, name, str(cmdline), proc_pid)
                 elif type == "ram":
-                    self.ram_metric.labels(self.host, metric['metric']['proc_name'],metric['metric']['proc_cmdline'], metric['metric']['proc_pid'], 'used').set(0)
-                    self.ram_metric.labels(self.host, metric['metric']['proc_name'],metric['metric']['proc_cmdline'], metric['metric']['proc_pid'], 'swap').set(0)
+                    logging.warning(f'[RAM JUDGE] Process {name} ({proc_pid}) not found on system set value to 0 & remove metric from pushgateway')
+                    self.ram_metric.labels(host, name, str(cmdline), proc_pid, 'used').set(0)
+                    self.ram_metric.labels(host, name, str(cmdline), proc_pid, 'swap').set(0)
+                    self.ram_metric.remove(host, name, str(cmdline), proc_pid, 'used')
+                    self.ram_metric.remove(host, name, str(cmdline), proc_pid, 'swap')
 
     def cleaner(self, procs):
         """Call prometheus to set to 0 the metrics of the processes that are not running"""
 
         prom = PrometheusConnect(url=PROMETHEUS, disable_ssl=True)
-
-        cpu = prom.custom_query(query="cpu_usage_percent != 0")
-        ram = prom.custom_query(query="memory_usage_bytes != 0")
-
-        self.judge(cpu, procs, "cpu")
-        self.judge(ram, procs, "ram")
+        host_format = "{" + f'host="{self.host}"' + "}"
+        cpu = prom.custom_query(query=f"cpu_usage_percent{host_format} != 0")
+        logging.info(f'[CLEANER] Found {len(cpu)} cpu metrics on prometheus')
+        ram = prom.custom_query(query=f"memory_usage_bytes{host_format} != 0")
+        logging.info(f'[CLEANER] Found {len(ram)} ram metrics on prometheus')
+        if len(cpu) > 0:
+            self.judge(cpu, procs, "cpu")
+        if len(ram) > 0:
+            self.judge(ram, procs, "ram")
 ```
 
-The `cleaner` function, will gather the metrics that do not have 0 value, then the `judge` function will compare the prometheus metric label `proc_pid` with the current PIDs from the current iteration, and will set to 0 those metrics that are not currently running! I accept ideas, this is the best way I found to have metrics with meaning from this exporter.
+The `cleaner` function, will gather the metrics that do not have 0 value, then the `judge` function will compare the prometheus metric label `proc_pid` with the current PIDs from the current process call iteration, and will set to 0, then remove the labelset from prometheus as well. 
 
 Final thing! Really recommend reading [this](https://psutil.readthedocs.io/en/latest/index.html?highlight=cpu_percent#psutil.Process.cpu_percent) to understand CPU metrics. 
