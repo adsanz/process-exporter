@@ -38,6 +38,7 @@ class GatherMetrics():
             labelnames=['host', 'proc_name', 'proc_cmdline', 'proc_pid'], registry=self.registry)
         self.ram_total = Gauge("memory_total_bytes", "Total memory in bytes.",
             labelnames=['host'], registry=self.registry)
+    
         
         super().__init__()
 
@@ -51,7 +52,11 @@ class GatherMetrics():
             proc_pid = int(metric['metric']['proc_pid'])
             if proc_pid not in proc_pid_list:
                 name = metric['metric']['proc_name']
-                cmdline = metric['metric']['proc_cmdline']
+                cmdline = ""
+                for arg in metric['metric']['proc_cmdline']:
+                    cmdline = cmdline+" "+str(arg)
+                # remove white space from the beginning of the string
+                cmdline = cmdline[1:]
                 host = metric['metric']['host']
 
                 if type == "cpu":
@@ -64,11 +69,23 @@ class GatherMetrics():
                     self.ram_metric.labels(host, name, str(cmdline), proc_pid, 'swap').set(0)
                     self.ram_metric.remove(host, name, str(cmdline), proc_pid, 'used')
                     self.ram_metric.remove(host, name, str(cmdline), proc_pid, 'swap')
+    
+    def prom_check(self):
+        """Check if prometheus is up and running, return prom conn object if true"""
+        try:
+            prom = PrometheusConnect(url=PROMETHEUS, disable_ssl=True)
+            return [prom, True]
+        except:
+            return [None, False]
 
     def cleaner(self, procs):
         """Call prometheus to set to 0 the metrics of the processes that are not running"""
 
-        prom = PrometheusConnect(url=PROMETHEUS, disable_ssl=True)
+        prom, status = self.prom_check()
+        while not status:
+            logging.warning(f'[CLEANER] Prometheus not found, retrying in {SCRAPE_TIME} seconds')
+            time.sleep(SCRAPE_TIME)
+            prom, status = self.prom_check()
         host_format = "{" + f'host="{self.host}"' + "}"
         cpu = prom.custom_query(query=f"cpu_usage_percent{host_format} != 0")
         logging.info(f'[CLEANER] Found {len(cpu)} cpu metrics on prometheus')
@@ -89,10 +106,15 @@ class GatherMetrics():
 
             try:
                 with proc.oneshot():
-                    cpu_usage = proc.cpu_percent(interval=None) 
-                    self.ram_metric.labels(self.host, proc.info['name'], proc.info['cmdline'], proc.info['pid'], 'used').set(proc.memory_full_info().uss)
-                    self.ram_metric.labels(self.host, proc.info['name'], proc.info['cmdline'], proc.info['pid'], 'swap').set(proc.memory_full_info().swap)
-                    self.cpu_metric.labels(self.host, proc.info['name'], proc.info['cmdline'], proc.info['pid']).set(cpu_usage)
+                    cpu_usage = proc.cpu_percent(interval=None)
+                    cmdline = ""
+                    for arg in proc.info['cmdline']:
+                        cmdline = cmdline+" "+str(arg)
+                    # remove white space from the beginning of the string
+                    cmdline = cmdline[1:]
+                    self.ram_metric.labels(self.host, proc.info['name'], cmdline, proc.info['pid'], 'used').set(proc.memory_full_info().uss)
+                    self.ram_metric.labels(self.host, proc.info['name'], cmdline, proc.info['pid'], 'swap').set(proc.memory_full_info().swap)
+                    self.cpu_metric.labels(self.host, proc.info['name'], cmdline, proc.info['pid']).set(cpu_usage)
             except psutil.NoSuchProcess or psutil.ZombieProcess:
                 continue
 
