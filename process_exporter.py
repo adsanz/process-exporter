@@ -52,11 +52,7 @@ class GatherMetrics():
             proc_pid = int(metric['metric']['proc_pid'])
             if proc_pid not in proc_pid_list:
                 name = metric['metric']['proc_name']
-                cmdline = ""
-                for arg in metric['metric']['proc_cmdline']:
-                    cmdline = cmdline+" "+str(arg)
-                # remove white space from the beginning of the string
-                cmdline = cmdline[1:]
+                cmdline = metric['metric']['proc_cmdline']
                 host = metric['metric']['host']
 
                 if type == "cpu":
