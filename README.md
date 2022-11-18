@@ -4,6 +4,8 @@ Like top, but on prometheus.
 
 WARNING: This is for a very specific usecase, I do not recommend this exporter for multiple machines it will crash your grafana dashboards, and it will increase cardinality a lot!!
 
+*THIS IS ON DEVELOPMENT STATUS, THIS EXPORTER MIGHT BREAK YOUR PROM/VM INSTANCE*
+
 ![Screenshot](./docs/prom.png)
 ![Screenshot](./docs/grafana.png)
 
