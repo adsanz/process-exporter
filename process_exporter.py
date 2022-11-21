@@ -52,7 +52,12 @@ class GatherMetrics():
             proc_pid = int(metric['metric']['proc_pid'])
             if proc_pid not in proc_pid_list:
                 name = metric['metric']['proc_name']
-                cmdline = metric['metric']['proc_cmdline']
+                ## adding this try block since I've seen this happening not sure why. I'll investigate it further. But for now this will do.
+                try:
+                    cmdline = metric['metric']['proc_cmdline']
+                except KeyError:
+                    logging.error(f'[CLEANER] {name}  with pid {proc_pid} has no cmdline')
+                    cmdline = ""
                 host = metric['metric']['host']
 
                 if type == "cpu":
